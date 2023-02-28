@@ -7,7 +7,7 @@ class LolApi {
     method: string = "GET"
   ): Promise<Response> => {
     const url = query ? `${endpoint}?${new URLSearchParams(query)}` : endpoint;
-    return fetch(endpoint, {
+    return fetch(url, {
       method,
       headers: {
         "Content-Type": "application/json",
@@ -24,7 +24,8 @@ class LolApi {
 
   getMatches = async (puuid: string) => {
     return this.request(
-      `https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids`
+      `https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids`,
+      { start: "0", count: "5" }
     );
   };
 

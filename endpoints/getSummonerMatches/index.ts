@@ -11,8 +11,6 @@ export default async function getSummonerMatches(
   res: ExpressResponse,
   next: NextFunction
 ): Promise<void> {
-  res.set(defaultHeaders);
-
   const puuidResp = await handleLolApiOutput(
     () => lolApi.getSummonerPuuid((req.query.name as string) || ""),
     res,
@@ -34,6 +32,7 @@ export default async function getSummonerMatches(
     )
   );
 
+  res.set(defaultHeaders);
   res.send(JSON.stringify(matches));
   return;
 }
@@ -41,17 +40,27 @@ export default async function getSummonerMatches(
 async function handleLolApiOutput(
   apiCall: () => Promise<Response>,
   res: ExpressResponse,
-  next: NextFunction
+  next: NextFunction,
+  retries = 0
 ): Promise<any> {
   let data;
   try {
     data = await apiCall();
   } catch (error) {
     next(error);
-    return null;
+    return;
   }
 
   if (data.ok) return data.json();
+
+  if (data.status == 429) {
+    if (retries >= 3) {
+      next(new Error("Too many requests. Please try again later"));
+      return;
+    }
+
+    handleLolApiOutput(apiCall, res, next, retries + 1);
+  }
 
   if (data.status == 404) {
     res.status(404).send(
@@ -59,7 +68,7 @@ async function handleLolApiOutput(
         message: "Summoner data not found.",
       })
     );
-    return null;
+    return;
   }
 
   console.log(`
