@@ -1,4 +1,4 @@
-import express, { Express } from "express";
+import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import getSummonerMatches from "./endpoints/getSummonerMatches";
 
@@ -12,6 +12,7 @@ app.use(
 );
 
 app.get("/summoner/matches", getSummonerMatches);
+app.get("/health-check", (req: Request, res: Response) => res.send(""));
 
 app.listen(port, () => {
   console.log(`Server up! http://localhost:${port}`);
