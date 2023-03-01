@@ -29,7 +29,19 @@ export default async function getSummonerMatches(
   );
   if (!matches) return;
 
-  res.set(defaultHeaders).json(matches);
+  res.set(defaultHeaders).json(formatMatchesData(puuid, matches));
+}
+
+function formatMatchesData(puuid: string, matches: any) {
+  return matches.map((match: any) => ({
+    metadata: match.metadata,
+    info: {
+      ...match.info,
+      summoner: match.info.participants.find(
+        (player: any) => player.puuid === puuid
+      ),
+    },
+  }));
 }
 
 async function handleLolApiOutput(
@@ -47,7 +59,7 @@ async function handleLolApiOutput(
 
   if (data.ok) return data.json();
 
-  if (data.status == 429) {
+  if (data.status === 429) {
     if (retries >= 3) {
       sendError(res, 429, "Too many requests. Please try again later");
       return;
@@ -61,7 +73,7 @@ async function handleLolApiOutput(
     });
   }
 
-  if (data.status == 404) {
+  if (data.status === 404) {
     return;
   }
 
