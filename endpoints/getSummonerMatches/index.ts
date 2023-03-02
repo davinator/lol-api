@@ -3,36 +3,42 @@ import {
   Response as ExpressResponse,
 } from "express";
 import { defaultHeaders } from "../contants";
-import lolApi from "../../libs/lolApi";
+import lolApi, { ApiError } from "../../libs/lolApi";
 
 export default async function getSummonerMatches(
   req: ExpressRequest,
   res: ExpressResponse
 ): Promise<void> {
-  const puuidResp = await handleLolApiOutput(
-    () => lolApi.getSummonerPuuid((req.query.name as string) || ""),
-    res
-  );
-  if (!puuidResp) return;
-  const puuid: string = puuidResp.puuid;
+  let summoner;
+  let matchIds;
+  let matches;
 
-  const matchIds: string[] = await handleLolApiOutput(
-    () => lolApi.getMatches(puuid),
-    res
-  );
-  if (!matchIds) return;
+  try {
+    summoner = await lolApi.getSummoner((req.query.name as string) || "");
+  } catch (error: any) {
+    return sendError(res, error.code, error.message);
+  }
 
-  const matches = await Promise.all(
-    matchIds.map((matchId) =>
-      handleLolApiOutput(() => lolApi.getMatch(matchId), res)
-    )
-  );
-  if (!matches) return;
+  try {
+    matchIds = await lolApi.getMatches(summoner.puuid as string);
+  } catch (error: any) {
+    return sendError(res, error.code, error.message);
+  }
 
-  res.set(defaultHeaders).json(formatMatchesData(puuid, matches));
+  try {
+    matches = await Promise.all(
+      matchIds.map((matchId: string) => lolApi.getMatch(matchId))
+    );
+  } catch (error: any) {
+    return sendError(res, error.code, error.message);
+  }
+
+  res.set(defaultHeaders).json(formatMatchesData(summoner.puuid, matches));
 }
 
 function formatMatchesData(puuid: string, matches: any) {
+  // Pulls the player data for the match from the participants array
+  // and put it into a dedicated summoner object key
   return matches.map((match: any) => ({
     metadata: match.metadata,
     info: {
@@ -46,48 +52,10 @@ function formatMatchesData(puuid: string, matches: any) {
 
 async function handleLolApiOutput(
   apiCall: () => Promise<Response>,
-  res: ExpressResponse,
   retries = 0
 ): Promise<any> {
-  let data;
-  try {
-    data = await apiCall();
-  } catch (error) {
-    sendError(res, 500, "Unknow internal error. Please try again later");
-    return;
-  }
-
-  if (data.ok) return data.json();
-
-  if (data.status === 429) {
-    if (retries >= 3) {
-      sendError(res, 429, "Too many requests. Please try again later");
-      return;
-    }
-
-    return new Promise((resolve) => {
-      setTimeout(
-        () => resolve(handleLolApiOutput(apiCall, res, retries + 1)),
-        1000
-      );
-    });
-  }
-
-  if (data.status === 404) {
-    return;
-  }
-
-  console.log(`
-    LOL API call failed:
-    Code: ${data.status} - ${data.statusText}
-    Url: ${data.url}
-    Body: ${await data.text()}
-  `);
-  sendError(
-    res,
-    500,
-    "Your request could not be completed due to an error. Please try again later"
-  );
+  // Some common error handling for the API calls.
+  // Returns the results or throws an ApiError
 }
 
 function sendError(res: ExpressResponse, errorCode: number, message: string) {
